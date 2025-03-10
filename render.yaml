@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: 3d-slither-game
+    name: threed-slither-game
     env: node
     buildCommand: npm install
     startCommand: npm start
