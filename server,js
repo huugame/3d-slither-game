@@ -1,0 +1,107 @@
+const express = require('express');
+const { WebSocketServer } = require('ws');
+const http = require('http');
+const path = require('path');
+
+const app = express();
+const server = http.createServer(app);
+const wss = new WebSocketServer({ server });
+
+// Phục vụ file tĩnh
+app.use(express.static(path.join(__dirname, 'public')));
+
+// Lưu trữ thông tin người chơi
+const players = new Map();
+
+wss.on('connection', (ws) => {
+    const playerId = Math.random().toString(36).substr(2, 9);
+    console.log('Người chơi mới kết nối:', playerId);
+
+    // Khởi tạo người chơi mới
+    const player = {
+        id: playerId,
+        position: {
+            x: Math.random() * 100 - 50,
+            y: 0,
+            z: Math.random() * 100 - 50
+        },
+        segments: [],
+        score: 0
+    };
+    players.set(playerId, player);
+
+    // Gửi thông tin khởi tạo cho người chơi mới
+    ws.send(JSON.stringify({
+        type: 'init',
+        data: {
+            id: playerId,
+            players: Array.from(players.values())
+        }
+    }));
+
+    // Thông báo cho các người chơi khác
+    wss.clients.forEach(client => {
+        if (client !== ws && client.readyState === 1) { // 1 = OPEN
+            client.send(JSON.stringify({
+                type: 'playerJoined',
+                data: player
+            }));
+        }
+    });
+
+    // Xử lý tin nhắn từ client
+    ws.on('message', (message) => {
+        try {
+            const data = JSON.parse(message);
+            
+            if (data.type === 'updatePosition') {
+                players.get(playerId).position = data.position;
+                
+                wss.clients.forEach(client => {
+                    if (client !== ws && client.readyState === 1) {
+                        client.send(JSON.stringify({
+                            type: 'playerMoved',
+                            data: {
+                                id: playerId,
+                                position: data.position
+                            }
+                        }));
+                    }
+                });
+            }
+        } catch (error) {
+            console.error('Lỗi xử lý tin nhắn:', error);
+        }
+    });
+
+    // Xử lý ngắt kết nối
+    ws.on('close', () => {
+        console.log('Người chơi ngắt kết nối:', playerId);
+        players.delete(playerId);
+        
+        wss.clients.forEach(client => {
+            if (client.readyState === 1) {
+                client.send(JSON.stringify({
+                    type: 'playerLeft',
+                    data: playerId
+                }));
+            }
+        });
+    });
+
+    // Xử lý lỗi
+    ws.on('error', (error) => {
+        console.error('Lỗi WebSocket:', error);
+    });
+});
+
+// Route chính
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+// Khởi động server
+const PORT = process.env.PORT || 3000;
+server.listen(PORT, () => {
+    console.log(`Server đang chạy tại port ${PORT}`);
+});
