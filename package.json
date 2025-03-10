@@ -1,5 +1,5 @@
 {
-  "name": "3d-slither-game",
+  "name": "threed-slither-game",
   "version": "1.0.0",
   "description": "Game 3D Slither với WebSocket",
   "main": "server.js",
